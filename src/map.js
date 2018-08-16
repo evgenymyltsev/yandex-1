@@ -2,52 +2,51 @@ import { loadList, loadDetails } from './api';
 import { getDetailsContentLayout } from './details';
 import { createFilterControl } from './filter';
 
-export function initMap(ymaps, containerId) {
-  const myMap = new ymaps.Map(containerId, {
-    center: [55.76, 37.64],
-    controls: [],
-    zoom: 10
-  });
+const initMap = (ymaps, containerId) => {
+	const myMap = new ymaps.Map(containerId, {
+		center: [55.76, 37.64],
+		controls: [],
+		zoom: 10
+	});
 
-  const objectManager = new ymaps.ObjectManager({
-    clusterize: true,
-    gridSize: 64,
-    clusterIconLayout: 'default#pieChart',
-    clusterDisableClickZoom: false,
-    geoObjectOpenBalloonOnClick: false,
-    geoObjectHideIconOnBalloonOpen: false,
-    geoObjectBalloonContentLayout: getDetailsContentLayout(ymaps)
-  });
+	const objectManager = new ymaps.ObjectManager({
+		clusterize: true,
+		gridSize: 64,
+		clusterIconLayout: 'default#pieChart',
+		clusterDisableClickZoom: false,
+		geoObjectOpenBalloonOnClick: false,
+		geoObjectHideIconOnBalloonOpen: false,
+		geoObjectBalloonContentLayout: getDetailsContentLayout(ymaps)
+	});
 
-  objectManager.clusters.options.set('preset', 'islands#greenClusterIcons');
+	loadList().then(data => objectManager.objects.add(data));
 
-  loadList().then(data => {
-    objectManager.add(data);
-  });
+	// details
+	objectManager.objects.events.add('click', event => {
+		const objectId = event.get('objectId');
+		const obj = objectManager.objects.getById(objectId);
+		objectManager.objects.balloon.open(objectId);
 
-  // details
-  objectManager.objects.events.add('click', event => {
-    const objectId = event.get('objectId');
-    const obj = objectManager.objects.getById(objectId);
+		if (!obj.properties.details) {
+			loadDetails(objectId).then(data => {
+				obj.properties.details = data;
+				objectManager.objects.balloon.setData(obj);
+			});
+		}
+	});
 
-    objectManager.objects.balloon.open(objectId);
+	// filters
+	const listBoxControl = createFilterControl(ymaps);
+	myMap.controls.add(listBoxControl);
 
-    if (!obj.properties.details) {
-      loadDetails(objectId).then(data => {
-        obj.properties.details = data;
-        objectManager.objects.balloon.setData(obj);
-      });
-    }
-  });
+	const filterMonitor = new ymaps.Monitor(listBoxControl.state);
+	filterMonitor.add('filters', filters => {
+		objectManager.setFilter(
+			obj => filters[obj.isActive ? 'active' : 'defective']
+		);
+	});
 
-  // filters
-  const listBoxControl = createFilterControl(ymaps);
-  myMap.controls.add(listBoxControl);
+	myMap.geoObjects.add(objectManager);
+};
 
-  var filterMonitor = new ymaps.Monitor(listBoxControl.state);
-  filterMonitor.add('filters', filters => {
-    objectManager.setFilter(
-      obj => filters[obj.isActive ? 'active' : 'defective']
-    );
-  });
-}
+export default initMap;
